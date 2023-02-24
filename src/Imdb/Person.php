@@ -1,4 +1,5 @@
 <?php
+
 #############################################################################
 # IMDBPHP                              (c) Giorgos Giagas & Itzchak Rehberg #
 # written by Giorgos Giagas                                                 #
@@ -21,7 +22,6 @@ use Psr\SimpleCache\CacheInterface;
  */
 class Person extends MdbBase
 {
-
     protected $titleTypeMap = array(
       Title::MOVIE => Title::MOVIE,
       Title::TV_SERIES => Title::TV_SERIES,
@@ -41,7 +41,7 @@ class Person extends MdbBase
     );
 
     // "Name" page:
-    protected $main_photo = "";
+    protected $main_photo = null;
     protected $fullname = "";
     protected $birthday = array();
     protected $deathday = array();
@@ -56,6 +56,7 @@ class Person extends MdbBase
     protected $writerfilms = array();
     protected $selffilms = array();
     protected $archivefilms = array();
+    protected $jsonLD = null;
 
     // "Bio" page:
     protected $birth_name = "";
@@ -82,11 +83,11 @@ class Person extends MdbBase
     protected $SearchDetails = array();
 
     public static function fromSearchResults(
-      $id,
-      $name,
-      Config $config = null,
-      LoggerInterface $logger = null,
-      CacheInterface $cache = null
+        $id,
+        $name,
+        Config $config = null,
+        LoggerInterface $logger = null,
+        CacheInterface $cache = null
     ) {
         $person = new self($id, $config, $logger, $cache);
         $person->fullname = $name;
@@ -100,10 +101,10 @@ class Person extends MdbBase
      * @param CacheInterface $cache OPTIONAL override default cache
      */
     public function __construct(
-      $id,
-      Config $config = null,
-      LoggerInterface $logger = null,
-      CacheInterface $cache = null
+        $id,
+        Config $config = null,
+        LoggerInterface $logger = null,
+        CacheInterface $cache = null
     ) {
         parent::__construct($config, $logger, $cache);
         $this->setid($id);
@@ -150,34 +151,39 @@ class Person extends MdbBase
     #--------------------------------------------------------[ Photo specific ]---
 
     /** Get cover photo
-     * @param optional boolean thumb get the thumbnail (100x140, default) or the
-     *        bigger variant (400x600 - FALSE)
+     * @param boolean $thumb (optional) thumb get the thumbnail (140x207, default)
+     *                or the bigger variant with a maximum size of (1363x2048)
      * @return mixed photo (string url if found, FALSE otherwise)
      * @see IMDB person page / (Main page)
      */
     public function photo($thumb = true)
     {
-        if (empty($this->main_photo)) {
+        if ($this->main_photo === null) {
             $this->getPage("Name");
-            if (preg_match('!<td.*?id="img_primary".*?>*.*?<img.*?src="(.*?)"!ims', $this->page["Name"], $match)) {
+            $this->main_photo = false;
+            if (preg_match('!ipc-(?:poster--baseAlt|media--poster-m).*?<img.*?src="(.*?)"!ims', $this->page["Name"], $match)) {
                 if ($thumb) {
                     $this->main_photo = $match[1];
                 } else {
-                    $this->main_photo = str_replace('_SY140_SX100', '_SY600_SX400', $match[1]);
+                    $this->main_photo = preg_replace('!(_V1_).*(\.[a-z]+$)!', '$1$2', $match[1]);
                 }
-            } else {
-                return false;
+            } elseif (($jsonLD = $this->jsonLD()) !== false) {
+                // Fallback to bigger photo
+                if (isset($jsonLD->image)) {
+                    $this->main_photo = $jsonLD->image;
+                }
             }
         }
+
         return $this->main_photo;
     }
 
 
     /**
      * Save the photo to disk
-     * @param string path where to store the file
-     * @param optional boolean thumb get the thumbnail (100x140, default) or the
-     *        bigger variant (400x600 - FALSE)
+     * @param string $path where to store the file
+     * @param boolean $thumb (optional) get the thumbnail (140x207, default)
+     *                or the bigger variant with a maximum size of (1363x2048)
      * @return boolean success
      * @see IMDB person page / (Main page)
      */
@@ -212,8 +218,8 @@ class Person extends MdbBase
     }
 
     /** Get the URL for the movies cover photo
-     * @param optional boolean thumb get the thumbnail (100x140, default) or the
-     *        bigger variant (400x600 - FALSE)
+     * @param boolean $thumb (optional) get the thumbnail (140x207, default)
+     *                or the bigger variant with a maximum size of (1363x2048)
      * @return mixed url (string URL or FALSE if none)
      * @see IMDB person page / (Main page)
      */
@@ -228,16 +234,16 @@ class Person extends MdbBase
             $this->debug_scalar("<BR>***ERROR*** The configured image directory does not exist!<BR>");
             return false;
         }
-        $path = $this->photodir . "nm" . $this->imdbid() . "${ext}.jpg";
+        $path = $this->photodir . "nm" . $this->imdbid() . "{$ext}.jpg";
         if (@fopen($path, "r")) {
-            return $this->photoroot . "nm" . $this->imdbid() . "${ext}.jpg";
+            return $this->photoroot . "nm" . $this->imdbid() . "{$ext}.jpg";
         }
         if (!is_writable($this->photodir)) {
             $this->debug_scalar("<BR>***ERROR*** The configured image directory lacks write permission!<BR>");
             return false;
         }
         if ($this->savephoto($path, $thumb)) {
-            return $this->photoroot . "nm" . $this->imdbid() . "${ext}.jpg";
+            return $this->photoroot . "nm" . $this->imdbid() . "{$ext}.jpg";
         }
         return false;
     }
@@ -245,12 +251,12 @@ class Person extends MdbBase
     #----------------------------------------------------------[ Filmographie ]---
 
     /** Get filmography
-     * @param ref array where to store the filmography
-     * @param string type Which filmografie to retrieve ("actor","producer")
+     * @param array &$res where to store the filmography
+     * @param string $type name of the section to fetch filmography for e.g. 'actor', 'producer'
      */
     protected function filmograf(&$res, $type)
     {
-        $page = $this->getPage("Name");
+        $page = $this->getPage("Fullcredits");
         preg_match("!<a name=\"$type\"(.*?(<div id=\"filmo|<script))!msi", $page, $match);
         if (empty($type)) {
             $match[1] = $page;
@@ -266,8 +272,11 @@ class Person extends MdbBase
             for ($i = 0; $i < $mc; ++$i) {
                 $year = '';
                 $type = Title::MOVIE;
-                if (!preg_match('!href="/title/tt(\d{7,8})/[^"]*"\s*>(.*?)</a>\s*</b>\n?(.*)!ims', $matches[1][$i],
-                  $mov)) {
+                if (!preg_match(
+                    '!href="/title/tt(\d{7,8})/[^"]*"\s*>(.*?)</a>\s*</b>\n?(.*)!ims',
+                    $matches[1][$i],
+                    $mov
+                )) {
                     continue;
                 }
                 $char = array();
@@ -287,10 +296,10 @@ class Person extends MdbBase
                 }
                 if (empty($chname)) {
                     switch ($type) {
-                        case 'director' :
+                        case 'director':
                             $chname = 'Director';
                             break;
-                        case 'producer' :
+                        case 'producer':
                             $chname = 'Producer';
                             break;
                     }
@@ -577,8 +586,11 @@ class Person extends MdbBase
     {
         if (empty($this->bodyheight)) {
             $this->getPage("Bio");
-            if (preg_match("!Height</td>\s*<td>\s*(?<imperial>.*?)\s*(&nbsp;)?\((?<metric>.*?)\)!m", $this->page["Bio"],
-              $match)) {
+            if (preg_match(
+                "!Height</td>\s*<td>\s*(?<imperial>.*?)\s*(&nbsp;)?\((?<metric>.*?)\)!m",
+                $this->page["Bio"],
+                $match
+            )) {
                 $this->bodyheight["imperial"] = str_replace('&nbsp;', ' ', trim($match['imperial']));
                 $this->bodyheight["metric"] = str_replace('&nbsp;', ' ', trim($match['metric']));
             }
@@ -666,7 +678,7 @@ class Person extends MdbBase
                                       "year" => $fromYear
                                     );
                             } else {
-                                    $from = array("day" => '', "month" => '', "mon" => '', "year" => '');
+                                $from = array("day" => '', "month" => '', "mon" => '', "year" => '');
                             }
                             //to date
                             $toDay = '';
@@ -701,7 +713,7 @@ class Person extends MdbBase
                                       "year" => $toYear
                                     );
                             } else {
-                                    $to = array("day" => '', "month" => '', "mon" => '', "year" => '');
+                                $to = array("day" => '', "month" => '', "mon" => '', "year" => '');
                             }
                             // Comment and Children
                             $elements = count($matches[0]) - 1; //count remaining elements after dates
@@ -752,17 +764,35 @@ class Person extends MdbBase
             if ($this->page["Bio"] == "cannot open page") {
                 return array();
             } // no such page
-            if (preg_match('!<h4 class="li_group">Mini Bio[^>]+?>(.+?)<(h4 class="li_group"|div class="article")!ims',
-              $this->page["Bio"], $block)) {
-                preg_match_all('!<div class="soda.*?\s*<p>\s*(?<bio>.+?)\s</p>\s*<p><em>- IMDb Mini Biography By:\s*(?<author>.+?)\s*</em>!ims',
-                  $block[1], $matches);
+            if (preg_match(
+                '!<h4 class="li_group">Mini Bio[^>]+?>(.+?)<(h4 class="li_group"|div class="article")!ims',
+                $this->page["Bio"],
+                $block
+            )) {
+                preg_match_all(
+                    '!<div class="soda.*?\s*<p>\s*(?<bio>.+?)\s</p>\s*<p><em>- IMDb Mini Biography By:\s*(?<author>.+?)\s*</em>!ims',
+                    $block[1],
+                    $matches
+                );
                 for ($i = 0; $i < count($matches[0]); ++$i) {
-                    $bio_bio["desc"] = str_replace("href=\"/name/nm", "href=\"https://" . $this->imdbsite . "/name/nm",
-                      str_replace("href=\"/title/tt", "href=\"https://" . $this->imdbsite . "/title/tt",
-                        str_replace('/search/name', 'https://' . $this->imdbsite . '/search/name',
-                          $matches['bio'][$i])));
-                    $author = 'Written by ' . (str_replace('/search/name',
-                        'https://' . $this->imdbsite . '/search/name', $matches['author'][$i]));
+                    $bio_bio["desc"] = str_replace(
+                        "href=\"/name/nm",
+                        "href=\"https://" . $this->imdbsite . "/name/nm",
+                        str_replace(
+                            "href=\"/title/tt",
+                            "href=\"https://" . $this->imdbsite . "/title/tt",
+                            str_replace(
+                                '/search/name',
+                                'https://' . $this->imdbsite . '/search/name',
+                                $matches['bio'][$i]
+                            )
+                        )
+                    );
+                    $author = 'Written by ' . (str_replace(
+                        '/search/name',
+                        'https://' . $this->imdbsite . '/search/name',
+                        $matches['author'][$i]
+                    ));
                     if (@preg_match('!href="(.+?)"[^>]*>\s*(.*?)\s*</a>!', $author, $match)) {
                         $bio_bio["author"]["url"] = $match[1];
                         $bio_bio["author"]["name"] = $match[2];
@@ -780,8 +810,8 @@ class Person extends MdbBase
     #-----------------------------------------[ Helper to Trivia, Quotes, ... ]---
 
     /** Parse Trivia, Quotes, etc (same structs)
-     * @param string name
-     * @param ref array res
+     * @param string $name
+     * @param array &$res
      */
     protected function parparse($name, &$res)
     {
@@ -797,8 +827,11 @@ class Person extends MdbBase
         $block = substr($this->page["Bio"], $pos_s, $pos_e - $pos_s);
         if (preg_match_all('!<div class="soda[^>]*>(.*?)</div>!ms', $block, $matches)) {
             foreach ($matches[1] as $match) {
-                $res[] = str_replace('href="/name/nm', 'href="https://' . $this->imdbsite . '/name/nm',
-                  str_replace('href="/title/tt', 'href="https://' . $this->imdbsite . '/title/tt', $match));
+                $res[] = str_replace(
+                    'href="/name/nm',
+                    'href="https://' . $this->imdbsite . '/name/nm',
+                    str_replace('href="/title/tt', 'href="https://' . $this->imdbsite . '/title/tt', $match)
+                );
             }
         }
     }
@@ -861,8 +894,11 @@ class Person extends MdbBase
             }
             $pos_e = strpos($this->page["Bio"], "</table", $pos_s);
             $block = substr($this->page["Bio"], $pos_s, $pos_e - $pos_s);
-            if (preg_match_all("/<tr.*?<td.*?>(.*?)<\/td>.*?<td.*?>(.*?)<\/td>/ms", $block,
-              $matches)) { // for each table row
+            if (preg_match_all(
+                "/<tr.*?<td.*?>(.*?)<\/td>.*?<td.*?>(.*?)<\/td>/ms",
+                $block,
+                $matches
+            )) { // for each table row
                 $mc = count($matches[0]);
                 for ($i = 0; $i < $mc; ++$i) {
                     if (preg_match("/\/title\/tt(\d{7,8})\/\">(.*?)<\/a>\s*\((\d{4})\)/", $matches[1][$i], $match)) {
@@ -896,8 +932,11 @@ class Person extends MdbBase
             $arr = explode("<td", $block);
             $pc = count($arr);
             for ($i = 1; $i < $pc; ++$i) {
-                if (preg_match('/(.*).\s*<i>(.*)<\/i>\s*((.*):|)((.*),|)\s*((\d+)\.|)\s*ISBN\s*<a href="(.*)">(.*)<\/a>/iU',
-                  $arr[$i], $match)) {
+                if (preg_match(
+                    '/(.*).\s*<i>(.*)<\/i>\s*((.*):|)((.*),|)\s*((\d+)\.|)\s*ISBN\s*<a href="(.*)">(.*)<\/a>/iU',
+                    $arr[$i],
+                    $match
+                )) {
                     $this->pub_prints[] = array(
                       "author" => $match[1],
                       "title" => htmlspecialchars_decode($match[2], ENT_QUOTES),
@@ -926,9 +965,8 @@ class Person extends MdbBase
     #----------------------------------------------[ Helper for movie parsing ]---
 
     /** Parse movie helper
-     * @param ref array res where to store the results
-     * @param string page name of the page
-     * @param string header header of the block on the IMDB site
+     * @param array &$res where to store the results
+     * @param string $header header of the block on the IMDB site
      * @brief helper to pubmovies() and portrayedmovies()
      */
     protected function parsepubmovies(&$res, $header)
@@ -979,7 +1017,7 @@ class Person extends MdbBase
 
     /**
      * Helper for article parsing
-     * @param string title title of the block
+     * @param string $title title of the block
      * @return array
      * @brief used by interviews(), articles(), pictorials(), magcovers()
      * @see IMDB person page /publicity
@@ -1097,10 +1135,10 @@ class Person extends MdbBase
     #---------------------------------------------------------[ Search Details ]---
 
     /** Set some search details
-     * @param string role
-     * @param integer mid IMDB ID
-     * @param string name movie-name
-     * @param integer year
+     * @param string $role
+     * @param integer $mid IMDB ID
+     * @param string $name movie-name
+     * @param integer $year
      */
     public function setSearchDetails($role, $mid, $name, $year)
     {
@@ -1124,9 +1162,12 @@ class Person extends MdbBase
     public function real_id()
     {
         $page = $this->getPage('Name');
-        if (preg_match('#<meta property="pageId" content="nm(\d+)"#', $page, $matches) && !empty($matches[1])) {
-            return $matches[1];
+        if (preg_match('#<meta property="imdb:pageConst" content="nm(\d+)"#', $page, $matches)) {
+            if (!empty($matches[1])) {
+                return $matches[1];
+            }
         }
+        return null;
     }
 
     /**
@@ -1136,18 +1177,26 @@ class Person extends MdbBase
     protected function getUrlSuffix($pageName)
     {
         switch ($pageName) {
-            case "Name"        :
+            case "Name":
                 $urlname = "/";
                 break;
-            case "Bio"         :
+
+            case "Bio":
                 $urlname = "/bio";
                 break;
-            case "Publicity"   :
+
+            case "Publicity":
                 $urlname = "/publicity";
                 break;
-            default            :
+
+            case "Fullcredits":
+                $urlname = "/fullcredits";
+                break;
+
+            default:
                 throw new \Exception("Could not find URL for page $pageName");
         }
+
         return $urlname;
     }
 
@@ -1156,6 +1205,11 @@ class Person extends MdbBase
         return "https://" . $this->imdbsite . "/name/nm" . $this->imdbID . $this->getUrlSuffix($page);
     }
 
+    /**
+     * @param string $page Name of the actor page to fetch
+     * @return string
+     * @see Person::getUrlSuffix()
+     */
     protected function getPage($page = null)
     {
         if (!empty($this->page[$page])) {
@@ -1166,5 +1220,22 @@ class Person extends MdbBase
 
         return $this->page[$page];
     }
-}
 
+    protected function jsonLD()
+    {
+        if ($this->jsonLD !== null) {
+            return $this->jsonLD;
+        }
+
+        $page = $this->getPage("Name");
+        $jsonLD = false;
+
+        preg_match('#<script type="application/ld\+json">(.+?)</script>#ims', $page, $matches);
+
+        if (isset($matches[1])) {
+            $jsonLD = json_decode($matches[1]);
+        }
+
+        return $this->jsonLD = $jsonLD;
+    }
+}

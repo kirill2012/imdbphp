@@ -1,6 +1,6 @@
 <?php
 
-use \Imdb\Title;
+use Imdb\Title;
 
 require_once __DIR__ . "/helpers.php";
 
@@ -159,7 +159,7 @@ class PersonTest extends PHPUnit\Framework\TestCase
         $person = $this->getimdb_person();
         $result = $person->movies_thanx();
         $this->assertIsArray($result);
-        $this->assertCount(6, $result);
+        $this->assertCount(7, $result);
         $laLuna = array_find_item($result, 'mid', '1957945');
         $this->assertEquals('1957945', $laLuna['mid']);
         $this->assertEquals('Boy on the Moon', $laLuna['name']);
@@ -514,7 +514,7 @@ class PersonTest extends PHPUnit\Framework\TestCase
         $config->language = 'en-GB';
         $config->imdbsite = 'www.imdb.com';
         $config->cachedir = realpath(dirname(__FILE__) . '/cache') . '/';
-        $config->usezip = true;
+        $config->usezip = false;
         $config->cache_expire = 3600;
 
         return new \Imdb\Person($id, $config);

@@ -2,6 +2,77 @@
 History for IMDBPHP
 ====================
 
+v8.0.2 (21.02.2023)
+-------------------
+! Improved the documentation of Title::alsoknow()
+! Fixes Title::alsoknow() returning an 'original title' with a null name when your imdb display title is the original title
+- Deprecate PersonSearch::reset()
+
+v8.0.1 (14.02.2023)
+-------------------
++ Add setCount and setStart to TitleSearchAdvanced. setCount lets you change how many results you get,
+    and setStart lets you offset the start of the search results so you can get multiple pages
+! Fix Title::alsoknow() when country is not set. countryCode and languageCode will now be null if no language or country is set
+
+v8.0.0 (13.02.2023)
+-------------------
+
+! Title::plot() returns plain text utf-8 strings rather than html. It no longer contains the author at the end (You can get the author from Title::plot_split())
+! Title::plot_split() also has plain text utf-8 strings rather than html in its plot field
+! Title::releaseInfo() return has changed. The country strings have changed slightly, the dates are numbers rather than stringy numbers and month has been removed.
+    Was ['country' => 'USA', 'day' => '9', 'month' => 'June', 'mon' => '06', 'year' => '1993' ] now [ 'country' => 'United States', 'day' => 9, 'mon' => 6, 'year' => 1993, 'attributes' => [ 'Washington, D.C.', 'premiere' ] ]
+! Title::alsoknow() no longer returns a year or lang field (they were previously always an empty string). It no longer returns a comment of '$language title' for each aka.
+! Fixed these methods broken by site change: Title::releaseInfo(), Title::synopsis(), Title::alternateVersions(), Title::runtimes(), Title::distCompany(), Title::specialCompany(), Title::prodCompany(), Title::specialCompany(), Title::otherCompany(), Title::movie_recommendations(), Title::taglines(), Title::movieconnection(), Title::extReviews(), Title::officialSites(), Title::videosites()
++ Title::alsoknow() now returns a countryCode, language and languageCode for each AKA.
++ Title::runtimes() now returns a country and countryCode
++ Title::videosites() now returns a language, languageCode but not a type. Now ['url' => 'x', 'site' => FILM.TV, 'desc' => trailer, 'language' => German, 'languageCode' => de] was
+    ['url'=>'x', 'site' => 'FILM.TV', 'desc' => 'trailer', 'type' => '']
+
+
+v7.4.2 (07.01.2023)
+-------------------
+! Remove visibility from const to support < PHP 7.1
+
+v7.4.1 (07.01.2023)
+-------------------
+! Fix demo as `Title::soundtrack` where simplified in v7.3.1
+! Fix `Person::photo_localurl` in PHP 8.2
+! Fix `Title::photo_localurl` in PHP 8.2
+
+v7.4.0 (07.01.2023)
+-------------------
++ Added PER Coding Style using PHP-CS-Fixer to maintain consistent coding styles
++ Added .editorconfig to maintain consistent coding styles
+* Move the PHPStan configuration to neon and raise the level to 1
+* Format project according to coding style
+* Don't use zip for PersonTest
+! Fix `Title::cast` in PHP 8.1
+! Fix `Person::photo`
+! Fix `TitleTest::testEpisodes_returns_unknown_season_episodes`
+! Fix `Title::aspect_ratio`
+! Fix `TitleTest::testRuntimes_two_runtimes_one_annotation`
+! Fix `Person::real_id`
+! Fix `TitleTest::testAlsoknow`
+! Fix `Person::filmograf` #286 @duck7000
+* Change `Title::parentalGuide()` to also html entity decode single quotes
+! Fix `Calendar::upcomingReleases`
+! Fix `Title::tagline` in PHP 5.6 #284 @paxter
+
+v7.3.1 (08.10.2022)
+-------------------
+* Remove PHP 7.3 from tests
+! Fix `Calendar::upcomingReleases()`
+! Fix `PersonSearch::results()`
+! Fix `Title::storyline()`
+! Fix `Title::tagline()`
+! Fix `Title::parentalGuide()`
+! Fix `TitleSearch::search()`
+! Fix `Title::populateEpisodeSeasonEpisode()`
+! Fix `Title::keywords()` #278 @duck7000 and @tboothman
+* Simplify `Title::soundtrack()` to just return raw data rather than badly trying to parse it
+! Fix `Person::spouse()` #275 @duck7000
+! Fix `Title::died()`
+
 v7.3.0 (03.03.2022)
 -------------------
 + `Person::real_id()` gives the imdb ID of a person after following any redirects from the ID requested. Thanks @duck7000
