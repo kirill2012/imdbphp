@@ -2,9 +2,6 @@
 
 namespace Imdb;
 
-use Psr\Log\LoggerInterface;
-use Psr\SimpleCache\CacheInterface;
-
 /**
  * Handles requesting urls, including the caching layer
  */
@@ -32,7 +29,7 @@ class Pages
      * @param CacheInterface $cache
      * @param LoggerInterface $logger
      */
-    public function __construct(Config $config, CacheInterface $cache, LoggerInterface $logger)
+    public function __construct(Config $config, $cache, $logger)
     {
         $this->config = $config;
         $this->cache = $cache;
