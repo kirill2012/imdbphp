@@ -11,9 +11,6 @@
 
 namespace Imdb;
 
-use Psr\Log\LoggerInterface;
-use Psr\SimpleCache\CacheInterface;
-
 /**
  * Accessing Movie information
  * @author Georgos Giagas
