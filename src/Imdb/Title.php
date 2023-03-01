@@ -12,9 +12,6 @@
 
 namespace Imdb;
 
-use Psr\Log\LoggerInterface;
-use Psr\SimpleCache\CacheInterface;
-
 /**
  * A title on IMDb
  * @author Georgos Giagas
@@ -147,8 +144,8 @@ class Title extends MdbBase
         $year,
         $type,
         Config $config = null,
-        LoggerInterface $logger = null,
-        CacheInterface $cache = null
+        $logger = null,
+        $cache = null
     ) {
         $imdb = new Title($id, $config, $logger, $cache);
         $imdb->main_title = $title;
@@ -166,8 +163,8 @@ class Title extends MdbBase
     public function __construct(
         $id,
         Config $config = null,
-        LoggerInterface $logger = null,
-        CacheInterface $cache = null
+        $logger = null,
+        $cache = null
     ) {
         parent::__construct($config, $logger, $cache);
         $this->setid($id);
