@@ -2,16 +2,13 @@
 
 namespace Imdb;
 
-use Psr\Log\LoggerInterface;
-use Psr\SimpleCache\CacheInterface;
-
 /**
  * File caching
  * Caches files to disk in config->cachedir optionally gzipping if config->usezip
  *
  * Config keys used: cachedir cache_expire usezip converttozip usecache storecache
  */
-class Cache implements CacheInterface
+class Cache
 {
     /**
      * @var Config
@@ -29,7 +26,7 @@ class Cache implements CacheInterface
      * @param LoggerInterface $logger
      * @throws Exception
      */
-    public function __construct(Config $config, LoggerInterface $logger)
+    public function __construct(Config $config, $logger)
     {
         $this->config = $config;
         $this->logger = $logger;
