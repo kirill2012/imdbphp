@@ -2,13 +2,11 @@
 
 namespace Imdb;
 
-use Psr\Log\LoggerInterface;
-
 /**
  * Debug logging. Echos html to the page
  * Only used when `\Imdb\Config::debug` is true
  */
-class Logger implements LoggerInterface
+class Logger
 {
     protected $enabled;
 
