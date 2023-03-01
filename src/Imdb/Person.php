@@ -12,9 +12,6 @@
 
 namespace Imdb;
 
-use Psr\Log\LoggerInterface;
-use Psr\SimpleCache\CacheInterface;
-
 /**
  * A person on IMDb
  * @author Izzy (izzysoft AT qumran DOT org)
@@ -86,8 +83,8 @@ class Person extends MdbBase
         $id,
         $name,
         Config $config = null,
-        LoggerInterface $logger = null,
-        CacheInterface $cache = null
+        $logger = null,
+        $cache = null
     ) {
         $person = new self($id, $config, $logger, $cache);
         $person->fullname = $name;
@@ -103,8 +100,8 @@ class Person extends MdbBase
     public function __construct(
         $id,
         Config $config = null,
-        LoggerInterface $logger = null,
-        CacheInterface $cache = null
+        $logger = null,
+        $cache = null
     ) {
         parent::__construct($config, $logger, $cache);
         $this->setid($id);
